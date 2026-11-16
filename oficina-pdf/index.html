@@ -284,6 +284,7 @@
     .secondary:not(:disabled):hover { background: #3b2b70; }
     .clear-files { margin-inline-start: auto; padding-inline: 10px; }
     .button.run {
+      gap: 10px;
       min-width: 204px;
       min-height: 62px;
       padding: 12px 24px;
@@ -292,6 +293,7 @@
       font-size: 19px;
       text-shadow: 0 1px 2px #003b00;
     }
+    .run-icon { display: block; flex: none; }
     .button.run:not(:disabled):hover { background: #019b03; }
     .button.run:disabled { background: #018403; opacity: 1; }
 
@@ -479,7 +481,10 @@
         <strong id="status-title">Aguardando arquivos</strong>
         <p class="feedback" id="feedback" role="status" aria-live="polite"></p>
       </div>
-      <button class="button run" id="run" type="button" disabled>Juntar PDFs</button>
+      <button class="button run" id="run" type="button" disabled>
+        <img class="run-icon" id="run-icon" width="32" height="32" alt="">
+        <span id="run-label">Juntar PDFs</span>
+      </button>
     </div>
     <div class="result" id="result" hidden>
       <p id="result-text"></p>
@@ -665,7 +670,7 @@
       ui.choose.textContent = operation.multiple ? "Selecionar arquivos" : "Selecionar PDF";
       ui["drop-hint"].textContent = operation.multiple ? "Arraste ou selecione os arquivos" : "Arraste ou selecione o PDF";
       ui["drop-detail"].textContent = operation.multiple ? "Você pode adicionar arquivos em etapas." : "Selecione um PDF por vez.";
-      ui.run.textContent = operation.title;
+      ui["run-label"].textContent = operation.title;
       ui.option.replaceChildren();
       if (operation.options) {
         ui["option-label"].textContent = operation.optionLabel;
@@ -1026,6 +1031,7 @@
       if (ui.drop.contains(event.target)) addFiles(event.dataTransfer.files);
     });
 
+    ui["run-icon"].src = document.querySelector('link[rel="icon"]').href;
     selectOperation("merge");
   </script>
   <script type="application/json" id="presence-config">{"apiKey":"AIzaSyDS-JEDAp0GsOs2MBLtvnN2yDYKjeNlfHI","projectId":"oficina-pdf-ciee","appId":"1:1032359767433:web:104a2e6668cea8d7a1c558","databaseURL":"https://oficina-pdf-ciee-default-rtdb.firebaseio.com"}</script>
