@@ -228,6 +228,12 @@
     .settings { margin-top: 14px; }
     .settings label { margin-bottom: 5px; }
     .settings p { color: var(--muted); font-size: 12px; margin: 6px 0 0; }
+    .dpi-help { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border); }
+    .dpi-help summary { cursor: pointer; color: #e5ddff; font-size: 13px; font-weight: 650; }
+    .dpi-help summary:focus-visible { outline: 2px solid var(--purple); outline-offset: 3px; }
+    .dpi-help ul { margin: 8px 0 0; padding-left: 20px; color: var(--muted); font-size: 12px; }
+    .dpi-help li + li { margin-top: 4px; }
+    .dpi-help li strong { color: #f4f6ff; }
 
     .button {
       display: inline-flex;
@@ -386,6 +392,15 @@
               <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
             </div>
             <p id="option-hint"></p>
+            <details class="dpi-help" id="dpi-help" hidden>
+              <summary>O que é DPI e qual nível escolher?</summary>
+              <p>DPI significa “pontos por polegada”. Na compressão, indica quantos pixels são usados para representar cada polegada da página. Um DPI maior tende a deixar a imagem mais nítida e o arquivo maior.</p>
+              <ul>
+                <li><strong>Leve · 144 dpi</strong> — Preserva melhor letras pequenas, carimbos e detalhes.</li>
+                <li><strong>Equilibrada · 110 dpi</strong> — Equilibra a redução do tamanho com a legibilidade na tela. É um bom ponto de partida.</li>
+                <li><strong>Forte · 80 dpi</strong> — Prioriza um arquivo menor. Letras pequenas podem ficar borradas.</li>
+              </ul>
+            </details>
           </div>
         </div>
       </section>
@@ -429,7 +444,7 @@
         "minimum": 1,
         "multiple": false,
         "optionLabel": "Nível de compressão",
-        "optionHint": "A compressão transforma as páginas em imagens. O texto deixa de ser selecionável, e links e formulários interativos deixam de funcionar.",
+        "optionHint": "Nos três níveis, a compressão transforma as páginas em imagens. O texto deixa de ser selecionável e pesquisável. Links e formulários interativos deixam de funcionar.",
         "options": [
           { "value": "light", "label": "Leve · 144 dpi", "dpi": 144, "quality": 0.82 },
           { "value": "balanced", "label": "Equilibrada · 110 dpi", "dpi": 110, "quality": 0.65, "selected": true },
@@ -575,6 +590,7 @@
       state.files = [];
       const operation = config[key];
       ui.operation.value = key;
+      ui["dpi-help"].hidden = key !== "compress";
       ui["operation-hint"].textContent = operation.hint;
       ui["file-input"].accept = operation.accept;
       ui["file-input"].multiple = operation.multiple;
