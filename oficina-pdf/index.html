@@ -1000,16 +1000,23 @@
       const allConnections = db.ref(database, "presence");
       const ownConnections = db.child(allConnections, user.uid);
       let snapshot;
-      let connectionKey;
+      let connection;
+      let serverOffset = 0;
       let generation = 0;
       let connectionConfirmed = false;
+      const pulseInterval = 30000;
+      const presenceLifetime = 90000;
 
       function renderCount() {
-        if (!connectionConfirmed || !snapshot?.hasChild(user.uid + "/" + connectionKey)) {
+        const cutoff = Date.now() + serverOffset - presenceLifetime;
+        if (!connectionConfirmed || !(snapshot?.child(user.uid + "/" + connection?.key).val() > cutoff)) {
           pill.hidden = true;
           return;
         }
-        const total = snapshot.size;
+        let total = 0;
+        snapshot.forEach(profile => {
+          if (profile.forEach(tab => tab.val() > cutoff)) total++;
+        });
         counter.textContent = number.format(total) + (total === 1 ? " pessoa online" : " pessoas online");
         pill.hidden = false;
       }
@@ -1022,22 +1029,32 @@
         renderCount();
       });
 
+      db.onValue(db.ref(database, ".info/serverTimeOffset"), offset => {
+        serverOffset = offset.val() || 0;
+        renderCount();
+      });
+
+      window.setInterval(renderCount, 5000);
+      window.setInterval(() => {
+        if (connectionConfirmed) db.set(connection, db.serverTimestamp()).catch(() => {});
+      }, pulseInterval);
+
       db.onValue(db.ref(database, ".info/connected"), async status => {
         const current = ++generation;
         connectionConfirmed = false;
         renderCount();
         if (status.val() !== true) return;
 
-        const connection = db.push(ownConnections);
+        const candidate = db.push(ownConnections);
         try {
-          await db.onDisconnect(connection).remove();
+          await db.onDisconnect(candidate).remove();
           if (current !== generation) return;
-          await db.set(connection, true);
+          await db.set(candidate, db.serverTimestamp());
           if (current !== generation) {
-            await db.remove(connection);
+            await db.remove(candidate);
             return;
           }
-          connectionKey = connection.key;
+          connection = candidate;
           connectionConfirmed = true;
           renderCount();
         } catch {
