@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'wasm-unsafe-eval' blob: https://cdn.jsdelivr.net; style-src 'unsafe-inline'; img-src blob: data:; font-src blob: data: https://cdn.jsdelivr.net; connect-src https://cdn.jsdelivr.net; worker-src blob: https://cdn.jsdelivr.net; base-uri 'none'; form-action 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'wasm-unsafe-eval' blob: https://cdn.jsdelivr.net https://www.gstatic.com https://*.firebaseio.com https://*.firebasedatabase.app; style-src 'unsafe-inline'; img-src blob: data:; font-src blob: data: https://cdn.jsdelivr.net; connect-src https://cdn.jsdelivr.net https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://*.firebaseio.com https://*.firebasedatabase.app wss://*.firebaseio.com wss://*.firebasedatabase.app; frame-src 'self'; worker-src blob: https://cdn.jsdelivr.net; base-uri 'none'; form-action 'none'">
   <title>Oficina PDF</title>
   <style>
     :root {
@@ -46,7 +46,7 @@
       border-bottom: 1px solid #233556;
       box-shadow: 0 10px 30px #00000029;
     }
-    .brand, .privacy-pill, .card-heading, .status, footer {
+    .brand, .topbar-badges, .privacy-pill, .presence-pill, .card-heading, .status, footer {
       display: flex;
       align-items: center;
     }
@@ -67,15 +67,24 @@
     .brand-mark img { display: block; width: auto; height: 44px; }
     svg.icon { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
     .brand-title { margin: 0; font-size: 17px; line-height: 1.25; letter-spacing: -.015em; }
-    .privacy-pill {
+    .topbar-badges { flex-wrap: wrap; gap: 8px; }
+    .privacy-pill, .presence-pill {
       gap: 8px;
       padding: 8px 12px;
-      color: #76e3c5;
-      background: #0d2b2b;
-      border: 1px solid #215447;
+      border: 1px solid;
       border-radius: 999px;
       font-size: 12px;
       font-weight: 650;
+      white-space: nowrap;
+    }
+    .privacy-pill { color: #76e3c5; background: #0d2b2b; border-color: #215447; }
+    .presence-pill { color: #e5ddff; background: #241d43; border-color: #4d3877; }
+    .presence-pill::before {
+      content: "";
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #76e3c5;
     }
     .privacy-pill .icon, footer .icon { width: 15px; height: 15px; }
     .shell { width: min(1180px, calc(100% - 40px)); margin-inline: auto; }
@@ -293,8 +302,8 @@
     @media (max-width: 760px) {
       .shell { width: calc(100% - 24px); }
       main { padding-top: 28px; }
-      .topbar { min-height: 64px; padding: 12px 16px; }
-      .privacy-pill { display: none; }
+      .topbar { min-height: 64px; padding: 12px 16px; flex-direction: column; align-items: flex-start; gap: 10px; }
+      .privacy-pill, .presence-pill { padding: 5px 9px; }
       .tool-settings { flex-direction: column; align-items: stretch; gap: 10px; }
       .tool-settings .select-wrap { flex: auto; }
       .upload-grid { grid-template-columns: minmax(0, 1fr); gap: 10px; }
@@ -315,9 +324,15 @@
       </div>
       <p class="brand-title">Oficina PDF</p>
     </div>
-    <div class="privacy-pill">
-      <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4m-4 4v2"/></svg>
-      Processamento local
+    <div class="topbar-badges">
+      <div class="privacy-pill">
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4m-4 4v2"/></svg>
+        Processamento local
+      </div>
+      <div class="presence-pill" id="presence-pill" hidden
+           aria-live="polite" aria-atomic="true" title="Uma sessão por perfil de navegador">
+        <span id="presence-count"></span>
+      </div>
     </div>
   </header>
 
@@ -425,7 +440,7 @@
 
   <footer class="shell">
     <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22s8-4 8-11V6l-8-4-8 4v5c0 7 8 11 8 11z"/><path d="m9 12 2 2 4-4"/></svg>
-    Seus arquivos ficam no seu dispositivo. A internet é usada apenas para carregar as bibliotecas da ferramenta.
+    Seus arquivos ficam no seu dispositivo. A internet carrega as bibliotecas da ferramenta e atualiza o contador de presença.
   </footer>
 
   <script type="application/json" id="app-config">
@@ -955,6 +970,90 @@
     });
 
     selectOperation("merge");
+  </script>
+  <script type="application/json" id="presence-config">null</script>
+  <script type="module">
+    const config = JSON.parse(document.querySelector("#presence-config").textContent);
+    const pill = document.querySelector("#presence-pill");
+    const counter = document.querySelector("#presence-count");
+    const number = new Intl.NumberFormat("pt-BR");
+    const sdk = "https://www.gstatic.com/firebasejs/12.13.0/";
+
+    async function startPresence() {
+      const [{ initializeApp }, authSdk, db] = await Promise.all([
+        import(sdk + "firebase-app.js"),
+        import(sdk + "firebase-auth.js"),
+        import(sdk + "firebase-database.js")
+      ]);
+      const app = initializeApp(config, "oficina-pdf-presence");
+      async function authenticate() {
+        const auth = authSdk.initializeAuth(app, {
+          persistence: [authSdk.indexedDBLocalPersistence, authSdk.browserLocalPersistence]
+        });
+        await auth.authStateReady();
+        return auth.currentUser || (await authSdk.signInAnonymously(auth)).user;
+      }
+      const user = navigator.locks
+        ? await navigator.locks.request("oficina-pdf-presence-auth", authenticate)
+        : await authenticate();
+      const database = db.getDatabase(app);
+      const allConnections = db.ref(database, "presence");
+      const ownConnections = db.child(allConnections, user.uid);
+      let snapshot;
+      let connectionKey;
+      let generation = 0;
+      let connectionConfirmed = false;
+
+      function renderCount() {
+        if (!connectionConfirmed || !snapshot?.hasChild(user.uid + "/" + connectionKey)) {
+          pill.hidden = true;
+          return;
+        }
+        const total = snapshot.size;
+        counter.textContent = number.format(total) + (total === 1 ? " pessoa online" : " pessoas online");
+        pill.hidden = false;
+      }
+
+      db.onValue(allConnections, value => {
+        snapshot = value;
+        renderCount();
+      }, () => {
+        snapshot = undefined;
+        renderCount();
+      });
+
+      db.onValue(db.ref(database, ".info/connected"), async status => {
+        const current = ++generation;
+        connectionConfirmed = false;
+        renderCount();
+        if (status.val() !== true) return;
+
+        const connection = db.push(ownConnections);
+        try {
+          await db.onDisconnect(connection).remove();
+          if (current !== generation) return;
+          await db.set(connection, true);
+          if (current !== generation) {
+            await db.remove(connection);
+            return;
+          }
+          connectionKey = connection.key;
+          connectionConfirmed = true;
+          renderCount();
+        } catch {
+          if (current === generation) pill.hidden = true;
+        }
+      });
+
+      window.addEventListener("pagehide", () => db.goOffline(database));
+      window.addEventListener("pageshow", event => {
+        if (event.persisted) db.goOnline(database);
+      });
+    }
+
+    if (config && location.protocol === "https:") {
+      startPresence().catch(() => { pill.hidden = true; });
+    }
   </script>
 </body>
 </html>
