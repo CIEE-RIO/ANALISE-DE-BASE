@@ -262,6 +262,7 @@
     .button:not(:disabled):hover { background: #ffb27b; }
     .secondary { color: #e5ddff; background: #30245c; border-color: #513a8c; }
     .secondary:not(:disabled):hover { background: #3b2b70; }
+    .clear-files { margin-inline-start: auto; padding-inline: 10px; }
 
     .status {
       gap: 14px;
@@ -393,6 +394,7 @@
             <h2 id="selection-title">Arquivos selecionados</h2>
             <p id="file-count" aria-live="polite">0 arquivos</p>
           </div>
+          <button class="button secondary clear-files" id="clear-files" type="button" aria-label="Limpar arquivos selecionados" disabled>Limpar</button>
         </div>
         <div class="queue">
           <div class="queue-empty" id="queue-empty">
@@ -523,6 +525,7 @@
     function renderControls() {
       const ready = state.files.length >= config[state.operation].minimum;
       ui.choose.disabled = state.busy;
+      ui["clear-files"].disabled = state.busy || state.files.length === 0;
       ui.option.disabled = state.busy;
       ui.operation.disabled = state.busy;
       ui.run.disabled = state.busy || !ready;
@@ -932,6 +935,12 @@
     ui.operation.addEventListener("change", () => selectOperation(ui.operation.value));
 
     ui.choose.addEventListener("click", () => ui["file-input"].click());
+    ui["clear-files"].addEventListener("click", () => {
+      state.files = [];
+      ui["file-input"].value = "";
+      refreshSelection();
+      ui.choose.focus();
+    });
     ui["file-input"].addEventListener("change", event => {
       addFiles(event.target.files);
       event.target.value = "";
