@@ -323,7 +323,7 @@
 
   <main class="shell">
     <div class="workspace-heading">
-      <h1>Ferramentas para PDF</h1>
+      <h1>FERRAMENTAS PARA PDF</h1>
       <p>Junte, comprima ou converta seus arquivos no navegador.</p>
     </div>
 
@@ -337,7 +337,7 @@
           <option value="merge">Juntar PDFs</option>
           <option value="compress">Comprimir PDF</option>
           <option value="toImages">PDF para imagens</option>
-          <option value="toPdf">Imagens para PDF</option>
+          <option value="toPdf">Converter em PDF</option>
         </select>
         <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
       </div>
@@ -465,9 +465,10 @@
         ]
       },
       "toPdf": {
-        "title": "Imagens para PDF",
-        "hint": "Selecione imagens JPG ou PNG. Cada imagem vira uma página do PDF.",
-        "accept": ".jpg,.jpeg,.png,image/jpeg,image/png",
+        "title": "Converter em PDF",
+        "hint": "Cada imagem vira uma página do PDF. Imagens animadas são convertidas em uma página estática.",
+        "formatLabel": "JPG/JPEG, PNG, WebP, GIF, BMP, AVIF e SVG",
+        "accept": ".jpg,.jpeg,.png,.webp,.gif,.bmp,.avif,.svg,image/jpeg,image/png,image/webp,image/gif,image/bmp,image/x-ms-bmp,image/avif,image/svg+xml",
         "minimum": 1,
         "multiple": true
       }
@@ -594,7 +595,7 @@
       ui["operation-hint"].textContent = operation.hint;
       ui["file-input"].accept = operation.accept;
       ui["file-input"].multiple = operation.multiple;
-      ui["file-format"].textContent = key === "toPdf" ? "Formatos aceitos: JPG e PNG" : "Formato aceito: PDF";
+      ui["file-format"].textContent = operation.formatLabel ? "Formatos aceitos: " + operation.formatLabel : "Formato aceito: PDF";
       ui.choose.textContent = operation.multiple ? "Selecionar arquivos" : "Selecionar PDF";
       ui["drop-hint"].textContent = operation.multiple ? "Arraste ou selecione os arquivos" : "Arraste ou selecione o PDF";
       ui["drop-detail"].textContent = operation.multiple ? "Você pode adicionar arquivos em etapas." : "Selecione um PDF por vez.";
@@ -612,26 +613,32 @@
 
     function addFiles(input) {
       if (state.busy || !input.length) return;
-      const images = state.operation === "toPdf";
-      const pattern = images ? /\.(jpe?g|png)$/i : /\.pdf$/i;
-      const types = images ? ["image/jpeg", "image/png"] : ["application/pdf"];
+      const operation = config[state.operation];
+      const formats = operation.accept.split(",");
       const files = Array.from(input);
-      const accepted = files.filter(file => file.size > 0 && (pattern.test(file.name) || types.includes(file.type)));
+      const accepted = files.filter(file => {
+        const name = file.name.toLowerCase();
+        return file.size > 0 && formats.some(format =>
+          format.startsWith(".") ? name.endsWith(format) : file.type === format
+        );
+      });
       const skipped = files.length - accepted.length;
 
       if (accepted.length === 0) {
-        setFeedback(images ? "Selecione imagens JPG ou PNG válidas." : "Selecione um arquivo PDF válido.", "error");
+        const message = operation.formatLabel ? "Selecione uma imagem em um dos formatos aceitos: " + operation.formatLabel + "."
+          : "Selecione um arquivo PDF válido.";
+        setFeedback(message, "error");
         return;
       }
 
-      if (config[state.operation].multiple) {
+      if (operation.multiple) {
         state.files.push(...accepted);
       } else {
         state.files = [accepted[0]];
       }
 
       refreshSelection();
-      if (!config[state.operation].multiple && files.length > 1) {
+      if (!operation.multiple && files.length > 1) {
         setFeedback("Esta ferramenta usa um PDF por vez. Foi selecionado o primeiro PDF válido.");
       } else if (skipped > 0) {
         setFeedback("Arquivos vazios ou de formato incompatível foram ignorados.");
@@ -824,7 +831,9 @@
     }
 
     async function imageForPdf(file) {
-      const url = URL.createObjectURL(file);
+      const svg = file.type === "image/svg+xml" || /\.svg$/i.test(file.name);
+      const source = svg && file.type !== "image/svg+xml" ? file.slice(0, file.size, "image/svg+xml") : file;
+      const url = URL.createObjectURL(source);
       const canvas = document.createElement("canvas");
       try {
         const image = new Image();
@@ -837,7 +846,7 @@
         canvas.width = Math.max(1, Math.round(width * scale));
         canvas.height = Math.max(1, Math.round(height * scale));
         canvas.getContext("2d").drawImage(image, 0, 0, canvas.width, canvas.height);
-        const png = file.type === "image/png" || /\.png$/i.test(file.name);
+        const png = file.type !== "image/jpeg" && !/\.jpe?g$/i.test(file.name);
         const blob = await canvasBlob(canvas, png ? "image/png" : "image/jpeg", 0.92);
         return { bytes: await blob.arrayBuffer(), png, width: canvas.width, height: canvas.height };
       } catch (error) {
