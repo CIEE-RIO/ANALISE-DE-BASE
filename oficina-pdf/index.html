@@ -50,23 +50,28 @@
       display: flex;
       align-items: center;
     }
-    .brand { gap: 13px; }
+    .brand { gap: clamp(12px, 2vw, 20px); }
     .brand-mark, .card-icon, .upload-icon, .status-icon, .divider {
       display: grid;
       flex: none;
       place-items: center;
     }
     .brand-mark {
-      width: 114px;
-      height: 56px;
-      padding: 5px 10px;
+      padding: 6px 12px;
       background: #fff;
       border: 1px solid #dce5f4;
       border-radius: 10px;
     }
-    .brand-mark img { display: block; width: auto; height: 44px; }
+    .brand-mark img { display: block; width: auto; height: clamp(48px, 7vw, 62px); }
     svg.icon { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-    .brand-title { margin: 0; font-size: 17px; line-height: 1.25; letter-spacing: -.015em; }
+    .brand-title {
+      margin: 0;
+      font-size: clamp(26px, 5vw, 38px);
+      font-weight: 750;
+      line-height: 1.1;
+      letter-spacing: -.03em;
+      white-space: nowrap;
+    }
     .topbar-badges { flex-wrap: wrap; gap: 8px; }
     .privacy-pill, .presence-pill {
       gap: 8px;
