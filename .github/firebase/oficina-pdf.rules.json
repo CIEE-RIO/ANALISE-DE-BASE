@@ -1,0 +1,15 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "presence": {
+      ".read": "auth != null && auth.token.firebase.sign_in_provider === 'anonymous'",
+      "$uid": {
+        "$connection": {
+          ".write": "auth != null && auth.uid === $uid && auth.token.firebase.sign_in_provider === 'anonymous' && $connection.matches(/^[-0-9A-Z_a-z]{20}$/)",
+          ".validate": "newData.val() === true"
+        }
+      }
+    }
+  }
+}
