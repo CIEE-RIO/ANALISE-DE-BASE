@@ -567,9 +567,9 @@
       },
       "toPdf": {
         "title": "Converter em PDF",
-        "hint": "Cada imagem vira uma página do PDF. Imagens animadas são convertidas em uma página estática.",
-        "formatLabel": "JPG/JPEG, PNG, WebP, GIF, BMP, AVIF e SVG",
-        "accept": ".jpg,.jpeg,.png,.webp,.gif,.bmp,.avif,.svg,image/jpeg,image/png,image/webp,image/gif,image/bmp,image/x-ms-bmp,image/avif,image/svg+xml",
+        "hint": "Converta Word (.docx) e imagens em PDF. No Word, a diagramação pode mudar e as páginas são geradas como imagens. Arquivos .doc devem ser salvos como .docx.",
+        "formatLabel": "Word (.docx), JPG/JPEG, PNG, WebP, GIF, BMP, AVIF e SVG",
+        "accept": ".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.jpg,.jpeg,.png,.webp,.gif,.bmp,.avif,.svg,image/jpeg,image/png,image/webp,image/gif,image/bmp,image/x-ms-bmp,image/avif,image/svg+xml",
         "minimum": 1,
         "multiple": true
       }
@@ -727,7 +727,7 @@
       const skipped = files.length - accepted.length;
 
       if (accepted.length === 0) {
-        const message = operation.formatLabel ? "Selecione uma imagem em um dos formatos aceitos: " + operation.formatLabel + "."
+        const message = operation.formatLabel ? "Selecione um arquivo em um dos formatos aceitos: " + operation.formatLabel + "."
           : "Selecione um arquivo PDF válido.";
         setFeedback(message, "error");
         return;
@@ -960,11 +960,78 @@
       }
     }
 
+    async function wordForPdf(file) {
+      const [mammoth, html2pdf, purifier] = await Promise.all([
+        loadLibrary("mammoth", () => loadScript(cdn + "mammoth@1.11.0/mammoth.browser.min.js", "mammoth")),
+        loadLibrary("html2pdf", () => loadScript(cdn + "html2pdf.js@0.10.3/dist/html2pdf.bundle.min.js", "html2pdf")),
+        loadLibrary("dompurify", () => loadScript(cdn + "dompurify@3.3.0/dist/purify.min.js", "DOMPurify"))
+      ]);
+      const container = document.createElement("div");
+      const staging = document.createElement("div");
+      staging.style.cssText = "position:absolute;left:-10000px;top:0;width:680px;";
+      container.className = "word-pdf";
+      container.setAttribute("aria-hidden", "true");
+      container.style.cssText = "width:680px;background:white;color:black;font:16px/1.5 Arial,sans-serif;color-scheme:light;overflow-wrap:anywhere;";
+      try {
+        const converted = await mammoth.convertToHtml(
+          { arrayBuffer: await file.arrayBuffer() },
+          { externalFileAccess: false }
+        );
+        container.innerHTML = purifier.sanitize(converted.value, {
+          ALLOWED_TAGS: ["p", "br", "h1", "h2", "h3", "h4", "h5", "h6", "strong", "b", "em", "i", "u", "s", "sup", "sub", "ul", "ol", "li", "table", "thead", "tbody", "tr", "td", "th", "img", "blockquote", "hr", "span"],
+          ALLOWED_ATTR: ["src", "alt", "colspan", "rowspan"],
+          ALLOW_DATA_ATTR: false
+        });
+        for (const image of container.querySelectorAll("img")) {
+          if (!/^data:image\/(png|jpeg|gif|webp|bmp);base64,/i.test(image.getAttribute("src") || "")) {
+            image.remove();
+            continue;
+          }
+          image.style.cssText = "max-width:100%;height:auto;";
+        }
+        if (!container.textContent.trim() && !container.querySelector("img")) {
+          throw new Error("Não foi possível encontrar conteúdo no Word " + file.name + ".");
+        }
+        for (const table of container.querySelectorAll("table")) {
+          table.style.cssText = "border-collapse:collapse;width:100%;table-layout:fixed;";
+        }
+        for (const cell of container.querySelectorAll("td, th")) {
+          cell.style.cssText = "border:1px solid #999;padding:6px;overflow-wrap:anywhere;";
+        }
+        staging.append(container);
+        document.body.append(staging);
+        await Promise.all(Array.from(container.querySelectorAll("img"), image => image.decode()));
+        const worker = html2pdf().set({
+          margin: 15,
+          image: { type: "jpeg", quality: 0.95 },
+          html2canvas: { scale: 1.5, backgroundColor: "#ffffff", scrollX: 0, scrollY: 0, logging: false },
+          jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+          pagebreak: { mode: ["css", "legacy"], avoid: ["p", "li", "tr", "img", "h1", "h2", "h3"] },
+          enableLinks: false
+        }).from(container);
+        return await worker.toPdf().outputPdf("arraybuffer");
+      } catch (error) {
+        console.error(error);
+        throw new Error("Não foi possível converter " + file.name + ". Confira se é um Word .docx válido e sem senha.");
+      } finally {
+        staging.remove();
+        document.querySelectorAll(".html2pdf__overlay").forEach(overlay => overlay.remove());
+      }
+    }
+
     async function toPdf(files) {
       const { PDFDocument } = await loadPdfLib();
       const output = await PDFDocument.create();
       for (const [index, file] of files.entries()) {
-        setFeedback("Convertendo imagem " + (index + 1) + " de " + files.length + "…");
+        setFeedback("Convertendo arquivo " + (index + 1) + " de " + files.length + "…");
+        const word = /\.docx$/i.test(file.name) ||
+          file.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+        if (word) {
+          const source = await PDFDocument.load(await wordForPdf(file));
+          const pages = await output.copyPages(source, source.getPageIndices());
+          for (const page of pages) output.addPage(page);
+          continue;
+        }
         const { bytes, png, width, height } = await imageForPdf(file);
         const image = png ? await output.embedPng(bytes) : await output.embedJpg(bytes);
         const landscape = width > height;
@@ -977,8 +1044,11 @@
         });
       }
       const blob = pdfBlob(await output.save());
-      const name = files.length === 1 ? baseName(files[0]) + ".pdf" : "imagens.pdf";
-      return { blob, name, message: files.length + (files.length === 1 ? " página gerada." : " páginas geradas.") };
+      const hasWord = files.some(file => /\.docx$/i.test(file.name) ||
+        file.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+      const name = files.length === 1 ? baseName(files[0]) + ".pdf" : hasWord ? "arquivos-convertidos.pdf" : "imagens.pdf";
+      const count = output.getPageCount();
+      return { blob, name, message: count + (count === 1 ? " página gerada." : " páginas geradas.") };
     }
 
     const operations = { merge, compress, toImages, toPdf };
